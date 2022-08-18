@@ -1,6 +1,8 @@
 ﻿using System;
-using Chess.Figures;
+using System.Collections.Generic;
+//using Chess.Figures;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 
@@ -18,8 +20,14 @@ public class ChessGame : Game
 
     private MouseState mState;
 
-    private Figure SelectedFigure;
+    private (int X, int Y)? SelectedFigureCors;
+    private Move[] SFMoves;
     private bool CanSelect = true;
+
+    private readonly ContentManager _content;
+
+    public static Dictionary<BV, Texture2D> _textures = new();
+    
 
 
     public ChessGame()
@@ -27,6 +35,8 @@ public class ChessGame : Game
         _graphics = new GraphicsDeviceManager(this);
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
+
+        _content = Content;
     }
 
     protected override void Initialize()
@@ -40,7 +50,26 @@ public class ChessGame : Game
 
         _graphics.ApplyChanges();
 
-        _board = new Board(width, height);
+        #region InitTextures
+        _textures.Add(BV.Pawn | BV.White, _content.Load<Texture2D>("Pawn"));
+        _textures.Add(BV.Horse | BV.White, _content.Load<Texture2D>("Horse"));
+        _textures.Add(BV.Bishop | BV.White, _content.Load<Texture2D>("Bishop"));
+        _textures.Add(BV.Rook | BV.White, _content.Load<Texture2D>("Rook"));
+        _textures.Add(BV.Queen | BV.White, _content.Load<Texture2D>("Queen"));
+        _textures.Add(BV.King | BV.White, _content.Load<Texture2D>("King"));
+
+        _textures.Add(BV.Pawn | BV.Black, _content.Load<Texture2D>("B_Pawn"));
+        _textures.Add(BV.Horse | BV.Black, _content.Load<Texture2D>("B_Horse"));
+        _textures.Add(BV.Bishop | BV.Black, _content.Load<Texture2D>("B_Bishop"));
+        _textures.Add(BV.Rook | BV.Black, _content.Load<Texture2D>("B_Rook"));
+        _textures.Add(BV.Queen | BV.Black, _content.Load<Texture2D>("B_Queen"));
+        _textures.Add(BV.King | BV.Black, _content.Load<Texture2D>("B_King"));
+
+        #endregion
+        string startPosition = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQK2R w KQkq";
+        string testPosition = "8/8/8/8/4B w";
+        string testPosition2 = "8/4P2p w";
+        _board = new Board(width, height, testPosition2);
 
         base.Initialize();
     }
@@ -51,44 +80,6 @@ public class ChessGame : Game
 
         _boardTexture = Content.Load<Texture2D>("BoardImg");
         _selectedTexture = Content.Load<Texture2D>("Selected");
-
-        #region Figures init
-        var blr = new Rook(0, 0, Content.Load<Texture2D>("B_Rook"), Color.Black);
-        var brr = new Rook(7, 0, Content.Load<Texture2D>("B_Rook"), Color.Black);
-        _board.Add(blr);
-        _board.Add(brr);
-        _board.Add(new Horse(1, 0, Content.Load<Texture2D>("B_Horse"), Color.Black));
-        _board.Add(new Horse(6, 0, Content.Load<Texture2D>("B_Horse"), Color.Black));
-        _board.Add(new Bishop(2, 0, Content.Load<Texture2D>("B_Bishop"), Color.Black));
-        _board.Add(new Bishop(5, 0, Content.Load<Texture2D>("B_Bishop"), Color.Black));
-        _board.Add(new Queen(3, 0, Content.Load<Texture2D>("B_Queen"), Color.Black));
-        _board.Add(new King(4, 0, Content.Load<Texture2D>("B_King"), Color.Black, blr, brr));
-        for (int x = 0; x < 8; x++)
-        {
-            _board.Add(new Pawn(x, 1, Content.Load<Texture2D>("B_Pawn"), Color.Black));
-        }
-
-        var wlr = new Rook(0, 7, Content.Load<Texture2D>("Rook"), Color.White);
-        var wrr = new Rook(7, 7, Content.Load<Texture2D>("Rook"), Color.White);
-        _board.Add(wlr);
-        _board.Add(wrr);
-        _board.Add(new Horse(1, 7, Content.Load<Texture2D>("Horse"), Color.White));
-        _board.Add(new Horse(6, 7, Content.Load<Texture2D>("Horse"), Color.White));
-        _board.Add(new Bishop(2, 7, Content.Load<Texture2D>("Bishop"), Color.White));
-        _board.Add(new Bishop(5, 7, Content.Load<Texture2D>("Bishop"), Color.White));
-        _board.Add(new Queen(3, 7, Content.Load<Texture2D>("Queen"), Color.White));
-        _board.Add(new King(4, 7, Content.Load<Texture2D>("King"), Color.White, wlr, wrr));
-        for (int x = 0; x < 8; x++)
-        {
-            _board.Add(new Pawn(x, 6, Content.Load<Texture2D>("Pawn"), Color.White));
-        }
-        //_board.Add(new Bishop(0, 5, Content.Load<Texture2D>("B_Horse"), Color.Black));
-        //_board.Add(new Bishop(4, 4, Content.Load<Texture2D>("B_Bishop"), Color.Black));
-        //_board.Add(new Queen(7, 1, Content.Load<Texture2D>("B_Queen"), Color.Black));
-        //_board.Add(new King(6, 5, Content.Load<Texture2D>("King"), Color.White));
-
-        _board.UpdateMoves();
-        #endregion
     }
 
     protected override void Update(GameTime gameTime)
@@ -100,30 +91,37 @@ public class ChessGame : Game
 
         if (mState.LeftButton == ButtonState.Pressed)
         {
+            //Mouse position
+            var (mX, mY) = mState.Position;
+            mX /= _board.xScale;
+            mY /= _board.yScale;
 
-            var (x, y) = mState.Position;
-            x /= _board.xScale;
-            y /= _board.yScale;
-
-            if (0 <= x && x < 8 && 0 <= y && y < 8)
+            // If in a range
+            if (0 <= mX && mX < 8 && 0 <= mY && mY < 8)
             {
-                if (SelectedFigure is not null)
+                
+                if (SelectedFigureCors.HasValue)
                 {
-                    //Console.Beep();
-                    foreach (Move m in SelectedFigure.Moves)
+                    foreach (Move move in SFMoves)
                     {
-                        if (m.EndPos.X == x && m.EndPos.Y == y)
+                        if (move.EndPos.X == mX && move.EndPos.Y == mY)
                         {
-                            _board.MakeMove(m);
-                            SelectedFigure = null;
+                            _board.MakeMove(move);
+                            _board.UpdateTextures();
+                            SelectedFigureCors = null; SFMoves = null;
                             break;
                         }
                     }
                 }
-                if (CanSelect && _board.BoardMatrix[y, x] is Figure figure)
+
+                int value = _board._boardMatrix[mY, mX];
+                if (CanSelect && value > 0)
                 {
-                    if (figure.SelfColor == _board.Turn)
-                        SelectedFigure = figure;
+                    if (Board.GetBV(value).Color == _board.Turn)
+                    {
+                        SelectedFigureCors = (mX, mY);
+                        SFMoves = _board._getMoves.For(mX, mY, _board._boardMatrix);
+                    }
                 }
                 //else
                 //    _board.SelectedFigure = null;
@@ -147,9 +145,9 @@ public class ChessGame : Game
 
         _spriteBatch.Draw(_boardTexture, new Vector2(0, 0), Color.Gray);
 
-        if (SelectedFigure is not null)
+        if (SelectedFigureCors is not null)
         {
-            foreach (Move m in SelectedFigure.Moves)
+            foreach (Move m in SFMoves)
             {
                 var posOnScreen = new Vector2(m.EndPos.X * _board.xScale, m.EndPos.Y * _board.xScale);
                 _spriteBatch.Draw(_selectedTexture, posOnScreen, Color.White);
@@ -161,4 +159,6 @@ public class ChessGame : Game
 
         base.Draw(gameTime);
     }
+
+
 }

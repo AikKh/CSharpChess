@@ -6,7 +6,8 @@ using System.Threading.Tasks;
 
 namespace Chess
 {
-    public enum BinarValues
+    // Binar values
+    public enum BV
     {
         Pawn = 1,
         Horse,

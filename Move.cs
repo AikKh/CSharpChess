@@ -14,34 +14,31 @@ public struct Move
 
     public Place place = Place.OutOfRange;
 
-    public Figure EatenFigure = null;
-    public Figure SelfFigure;
+    public int EatenFigure = 0;
 
-    public Move(int x, int y, Figure figure, Figure[,] board)
+    public Move((int, int) Start, (int, int) End, int[,] board)
     {
-        SelfFigure = figure;
-
-        StartPos = ((int)figure.Pos.X, (int)figure.Pos.Y);
-        EndPos = (x, y);
+        StartPos = Start;
+        EndPos = End;
 
         //Set place
-        place = GetPlace(board, figure.SelfColor);
-        
+        place = GetPlace(board); 
     }
 
-    private Place GetPlace(Figure[,] board, Color figureColor)
+    private Place GetPlace(int[,] board)
     {
         if (0 <= EndPos.X && EndPos.X < Board.XLen && 0 <= EndPos.Y && EndPos.Y < Board.YLen)
         {
-            var fPlace = board[EndPos.Y, EndPos.X];
+            int selfFigure = board[StartPos.Y, StartPos.X];
+            int sqFigure = board[EndPos.Y, EndPos.X];
 
-            if (fPlace is not null)
+            if (sqFigure != 0)
             {
-                if (fPlace.SelfColor == figureColor)
+                if (Board.GetBV(selfFigure).Color == Board.GetBV(sqFigure).Color)
                     return Place.Busy;
                 else
                 {
-                    EatenFigure = board[EndPos.Y, EndPos.X];
+                    EatenFigure = sqFigure;
                     return Place.CanEat;
                 }
             }
@@ -49,10 +46,7 @@ public struct Move
 
         }
         return Place.OutOfRange;
-
     }
-
-    public Vector2 Pos => new(EndPos.X, EndPos.Y);
 }
 
 
