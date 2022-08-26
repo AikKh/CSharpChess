@@ -7,25 +7,26 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Drawing;
 using Color = Microsoft.Xna.Framework.Color;
+using Microsoft.Xna.Framework.Input;
 
 namespace Chess;
 
 public class Board
 {
+    #region DrawingFields
     public const int XLen = 8;
     public const int YLen = 8;
 
     public int xScale;
     public int yScale;
+    #endregion
 
-    //private List<Move> _allMoves = new();
-
-    public readonly int[,] _boardMatrix = new int[8, 8];
-    private Texture2D[,] _textureBoard = new Texture2D[8, 8];
+    public int[,] _boardMatrix = new int[8, 8];
+    public BV Turn = BV.White;
 
     public GetMoves _getMoves = new GetMoves();
+    private Texture2D[,] _textureBoard = new Texture2D[8, 8];
 
-    public BV Turn = BV.White;
 
     public Board(int width, int height, string fen)
     {
@@ -33,12 +34,6 @@ public class Board
         yScale = height / YLen;
 
         LoadPosition(fen);
-        //GenerateMoves();
-    }
-
-    public void Add(int x, int y, int value)
-    {
-        _boardMatrix[y, x] = value;
     }
 
 
@@ -49,12 +44,10 @@ public class Board
         _boardMatrix[move.StartPos.Y, move.StartPos.X] = 0;
         _boardMatrix[move.EndPos.Y, move.EndPos.X] = figureValue;
 
-        GameTracker(figureValue, move);
+        MoveTracker(figureValue, move);
 
         if (switchTurn)
-            Turn = Turn == BV.Black ? BV.White : BV.Black;
-        //GenerateMoves();
-        //UpdateTextures();
+            SwitchTurn();
     }
 
     public List<Move> GenerateMoves()
@@ -67,12 +60,41 @@ public class Board
             if (value == 0)
                 return;
 
-            BV figure = GetBV(value).Figure;
-            allMoves.AddRange(_getMoves.For(x, y, _boardMatrix));
+            var color = GetBV(value).Color;
+
+            if (color == Turn)
+                allMoves.AddRange(_getMoves.For(x, y, _boardMatrix));
         });
 
         return allMoves;
     }
+
+    public List<Move> GenerateLegalMoves()
+    {
+        var res = new List<Move>();
+        var moves = GenerateMoves();
+
+        foreach (Move move in moves)
+        {
+            var saved = Save();
+            Dictionary<char, bool> castleValues = new(_getMoves._queenKingCastleSide);
+
+            MakeMove(move);
+
+            if (GenerateMoves().Any(m => m.EatenFigure == BV.King))
+            {
+                // There is a check
+            }
+            else
+                res.Add(move);
+
+            SwitchTurn();
+            LoadPosition(saved, castleValues);
+        }
+
+        return res;
+    }
+
 
     public static (BV Figure, BV Color) GetBV(int value)
     {
@@ -80,6 +102,22 @@ public class Board
         BV color = (BV)(value / 8 * 8);
 
         return (figure, color);
+    }
+
+    public int[,] Save() =>
+        (int[,])_boardMatrix.Clone();
+
+    public void SwitchTurn() =>
+        Turn = Turn == BV.Black ? BV.White : BV.Black;
+
+
+    public static void AcrossBoard(Action<int, int> func)
+    {
+        for (int y = 0; y < 8; y++)
+        {
+            for (int x = 0; x < 8; x++)
+                func(x, y);
+        }
     }
 
     private void LoadPosition(string fen)
@@ -129,16 +167,21 @@ public class Board
         UpdateTextures();
     }
 
-    private static void AcrossBoard(Action<int, int> func)
+    public void LoadPosition(int[,] matrix, Dictionary<char, bool> castleValues)
     {
-        for (int y = 0; y < 8; y++)
-        {
-            for (int x = 0; x < 8; x++)
-                func(x, y);
-        }
+        _boardMatrix = matrix;
+        _getMoves._queenKingCastleSide = castleValues;
     }
 
-    private void GameTracker(int figureValue, Move move)
+    public bool InCheck()
+    {
+        SwitchTurn();
+        var moves = GenerateLegalMoves();
+        SwitchTurn(); 
+        return (moves.Any(m => m.EatenFigure == BV.King));
+    }
+
+    private void MoveTracker(int figureValue, Move move)
     {
         var (figure, color) = GetBV(figureValue);
         
@@ -167,12 +210,9 @@ public class Board
                 _boardMatrix[move.EndPos.Y, move.EndPos.X] = (int)BV.Queen + (int)color;
             }
         }
-
     }
 
-
     #region DrawingPart
-
 
     public void DrawAll(SpriteBatch spriteBatch)
     {

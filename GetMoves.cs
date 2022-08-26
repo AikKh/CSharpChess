@@ -26,7 +26,7 @@ namespace Chess
 
         public Move[] For(int x, int y, int[,] board)
         {
-            var (figure, _) = Board.GetBV(board[y, x]);
+            var figure = Board.GetBV(board[y, x]).Figure;
             switch (figure)
             {
                 case BV.Pawn:
@@ -73,7 +73,7 @@ namespace Chess
             if (y == firstPos)
             {
                 var fMove = new Move(myPos, (myPos.X, myPos.Y + dir * 2), board);
-                if (fMove.place == Place.Free)
+                if (forwardMove.place == Place.Free && fMove.place == Place.Free)
                     res.Add(fMove);
             }
             else if (y == finalPos)
@@ -169,7 +169,7 @@ namespace Chess
             char queenSide = color == BV.White ? 'Q' : 'q';
             char kingSige = color == BV.White ? 'K' : 'k';
 
-            if (_queenKingCastleSide[queenSide] && leftMove.place == Place.Free)
+            if (Board.GetBV(board[y, 0]).Figure == BV.Rook && _queenKingCastleSide[queenSide] && leftMove.place == Place.Free)
             {
                 var leftCastle1 = new Move((x, y), (x - 2, y), board);
                 var leftCastle2 = new Move((x, y), (x - 3, y), board);
@@ -179,7 +179,7 @@ namespace Chess
                     AddIf(res, leftCastle1);
                 }
             }
-            if (_queenKingCastleSide[kingSige] && rightMove.place == Place.Free)
+            if (Board.GetBV(board[y, 7]).Figure == BV.Rook && _queenKingCastleSide[kingSige] && rightMove.place == Place.Free)
             {
                 var rightCasle = new Move((x, y), (x + 2, y), board);
                 AddIf(res, rightCasle);
@@ -187,6 +187,5 @@ namespace Chess
 
             return res.ToArray();
         }
-
     }
 }

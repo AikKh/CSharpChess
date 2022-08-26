@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Collections;
 
 namespace Chess;
 
@@ -14,7 +15,8 @@ public struct Move
 
     public Place place = Place.OutOfRange;
 
-    public int EatenFigure = 0;
+    public BV EatenFigure = 0;
+    public int Eval = 0;
 
     public Move((int, int) Start, (int, int) End, int[,] board)
     {
@@ -25,6 +27,13 @@ public struct Move
         place = GetPlace(board); 
     }
 
+    public Move(Move move)
+    {
+        StartPos = move.StartPos;
+        EndPos = move.EndPos;
+        place = move.place;
+    }
+
     private Place GetPlace(int[,] board)
     {
         if (0 <= EndPos.X && EndPos.X < Board.XLen && 0 <= EndPos.Y && EndPos.Y < Board.YLen)
@@ -32,13 +41,16 @@ public struct Move
             int selfFigure = board[StartPos.Y, StartPos.X];
             int sqFigure = board[EndPos.Y, EndPos.X];
 
+
             if (sqFigure != 0)
             {
-                if (Board.GetBV(selfFigure).Color == Board.GetBV(sqFigure).Color)
+                var (figure, color) = Board.GetBV(sqFigure);
+
+                if (Board.GetBV(selfFigure).Color == color)
                     return Place.Busy;
                 else
                 {
-                    EatenFigure = sqFigure;
+                    EatenFigure = figure;
                     return Place.CanEat;
                 }
             }
