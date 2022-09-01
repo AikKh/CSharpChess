@@ -3,142 +3,143 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 
-namespace Chess
+namespace Chess;
+
+public class AI
 {
-    public class AI
+    public static int Speed = 10;
+
+    private readonly Random random = new();
+    private readonly Board _board;
+    private readonly Evaluation _pm;
+    private BV _selfColor;
+
+    private static int i = 0;
+
+    public AI(Board board, BV selfColor)
     {
-        public static int Speed = 10;
+        _board = board;
+        _pm = new Evaluation();
+        _selfColor = selfColor;
+    }
 
-        private readonly Random random = new();
-        private readonly Board _board;
-        private readonly Evaluation _pm;
-        private BV _selfColor;
+    public void Move()
+    {
+        var moves = _board.GenerateLegalMoves().ToArray();
 
-        public AI(Board board, BV selfColor)
+        if (moves.Length == 0)
+            return;
+
+        for (int i = 0; i < moves.Length; i++)
         {
-            _board = board;
-            _pm = new Evaluation();
-            _selfColor = selfColor;
-        }
+            int[,] saved = _board.Save();
+            var castleValues = new Dictionary<char, bool>(_board._getMoves._queenKingCastleSide);
 
-        public void Move()
-        {
-            var moves = _board.GenerateLegalMoves().ToArray();
+            _board.MakeMove(moves[i]);
 
-            if (moves.Length == 0)
-                return;
-
-            for (int i = 0; i < moves.Length; i++)
-            {
-                int[,] saved = _board.Save();
-                var castleValues = new Dictionary<char, bool>(_board._getMoves._queenKingCastleSide);
-
-                _board.MakeMove(moves[i]);
-
-                int eval = -AphaBetaSearch(3);
-                //int eval = -Search(3);
-                moves[i].Eval = eval;
-
-                _board.LoadPosition(saved, castleValues);
-                _board.SwitchTurn();
-            }
-
-            Dictionary<int, List<Move>> moveValues = new();
-
-            foreach (Move move in moves)
-            {
-                if (moveValues.Keys.Any(k => k == move.Eval))
-                    moveValues[move.Eval].Add(move);
-                else
-                    moveValues.Add(move.Eval, new List<Move>() { move });
+            int eval = -Search(3);
+            moves[i].Eval = eval;
             
-            }
-            int maxEval = moveValues.Keys.Max();
-            Move[] strongestMoves = moveValues[maxEval].ToArray();
-
-            _board.MakeMove(strongestMoves[random.Next(0, strongestMoves.Length)]);
+            _board.LoadPosition(saved, castleValues);
+            _board.SwitchTurn();
         }
 
-        public void RandomMove()
+        Dictionary<int, List<Move>> moveValues = new();
+
+        foreach (Move move in moves)
         {
-            Move[] moves = _board.GenerateLegalMoves().ToArray();
-            if (moves.Length == 0)
-                return;
-
-            _board.MakeMove(moves[random.Next(0, moves.Length - 1)]);
+            if (moveValues.Keys.Any(k => k == move.Eval))
+                moveValues[move.Eval].Add(move);
+            else
+                moveValues.Add(move.Eval, new List<Move>() { move });
         }
+        int maxEval = moveValues.Keys.Max();
+        Move[] strongestMoves = moveValues[maxEval].ToArray();
 
-        private int AphaBetaSearch(int depth, int alpha = -int.MaxValue, int beta = int.MaxValue, bool maximizing = true)
+        _board.MakeMove(strongestMoves[random.Next(0, strongestMoves.Length)]);
+        _board.UpdateTextures();
+    }
+
+    public void RandomMove()
+    {
+        Move[] moves = _board.GenerateLegalMoves().ToArray();
+        if (moves.Length == 0)
+            return;
+
+        _board.MakeMove(moves[random.Next(0, moves.Length - 1)]);
+    }
+
+    private int AphaBetaSearch(int depth, int alpha = -int.MaxValue, int beta = int.MaxValue, bool maximizing = true)
+    {
+        if (depth == 0)
+            return _pm.Evaluate(_board._boardMatrix, _selfColor);
+
+        Move[] moves = _board.GenerateLegalMoves().ToArray();
+
+        if (moves.Length == 0)
         {
-            if (depth == 0)
-                return _pm.Evaluate(_board._boardMatrix, _selfColor);
-
-            Move[] moves = _board.GenerateLegalMoves().ToArray();
-
-            if (moves.Length == 0)
-            {
-                if (_board.InCheck())
-                    return int.MinValue;
-                return 0;
-            }
-
-            int maxEval = int.MinValue;
-
-            foreach (Move move in moves)
-            {
-                int[,] saved = _board.Save();
-                var castleValues = new Dictionary<char, bool>(_board._getMoves._queenKingCastleSide);
-
-                _board.MakeMove(move);
-                int evaluation = -AphaBetaSearch(depth - 1, -alpha, -beta, !maximizing);
-                maxEval = Math.Max(maxEval, evaluation);
-
-                _board.LoadPosition(saved, castleValues);
-                _board.SwitchTurn();
-
-                if (maximizing)
-                    alpha = Math.Max(maxEval, alpha);
-                else
-                    beta = Math.Max(maxEval, beta);
-
-                if (beta < alpha)
-                    break;
-
-            }
-
-            return maxEval;
+            if (_board.InCheck())
+                return int.MinValue;
+            return 0;
         }
 
-        private int Search(int depth)
+        int MainEval = int.MinValue;
+        ref int alphaBeta = ref alpha;
+
+        if (!maximizing)
+            alphaBeta = ref beta;
+
+        foreach (Move move in moves)
         {
-            if (depth == 0)
-                return _pm.Evaluate(_board._boardMatrix, _selfColor);
+            int[,] saved = _board.Save();
+            var castleValues = new Dictionary<char, bool>(_board._getMoves._queenKingCastleSide);
 
-            Move[] moves = _board.GenerateLegalMoves().ToArray();
+            _board.MakeMove(move);
+            int evaluation = -AphaBetaSearch(depth - 1, alpha, beta, !maximizing);
+            MainEval = Math.Max(MainEval, evaluation);
 
-            if (moves.Length == 0)
-            {
-                if (_board.InCheck())
-                    return int.MinValue;
-                return 0;
-            }
+            _board.LoadPosition(saved, castleValues);
+            _board.SwitchTurn();
 
-            int maxEval = int.MinValue;
+            alphaBeta = Math.Max(MainEval, alpha);
 
-            foreach (Move move in moves)
-            {
-                int[,] saved = _board.Save();
-                var castleValues = new Dictionary<char, bool>(_board._getMoves._queenKingCastleSide);
-
-                _board.MakeMove(move);
-                int evaluation = -Search(depth - 1);
-                maxEval = Math.Max(maxEval, evaluation);
-
-                _board.LoadPosition(saved, castleValues);
-                _board.SwitchTurn();
-            }
-            return maxEval;
+            if (beta <= alpha) 
+                break;
         }
+
+        return MainEval;
+    }
+
+    private int Search(int depth)
+    {
+        if (depth == 0)
+            return _pm.Evaluate(_board._boardMatrix, _selfColor);
+
+        Move[] moves = _board.GenerateLegalMoves().ToArray();
+
+        if (moves.Length == 0)
+        {
+            if (_board.InCheck())
+                return int.MinValue;
+            return 0;
+        }
+
+        int maxEval = int.MinValue;
+
+        foreach (Move move in moves)
+        {
+            int[,] saved = _board.Save();
+            var castleValues = new Dictionary<char, bool>(_board._getMoves._queenKingCastleSide);
+
+            _board.MakeMove(move);
+            int evaluation = -Search(depth - 1);
+            maxEval = Math.Max(maxEval, evaluation);
+
+            _board.LoadPosition(saved, castleValues);
+            _board.SwitchTurn();
+        }
+        return maxEval;
     }
 }
